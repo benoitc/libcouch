@@ -10,12 +10,12 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_compress).
+-module(libcouch_compress).
 
 -export([compress/2, decompress/1, is_compressed/2]).
 -export([get_compression_method/0]).
 
--include("couch_db.hrl").
+-include("libcouch.hrl").
 
 % binaries compressed with snappy have their first byte set to this value
 -define(SNAPPY_PREFIX, 1).
@@ -26,7 +26,7 @@
 
 
 get_compression_method() ->
-    case couch_config:get("couchdb", "file_compression") of
+    case libcouch_config:get("couchdb", "file_compression") of
     undefined ->
         ?DEFAULT_COMPRESSION;
     Method1 ->

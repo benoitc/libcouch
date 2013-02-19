@@ -110,7 +110,7 @@ init(Dir, Opts0) ->
 
     case open_db_file(FilePath, Opts0) of
         {ok, Fd} ->
-            {ok, UpdaterPid} = gen_server:start_link(couch_db_updater,
+            {ok, UpdaterPid} = gen_server:start_link(libcouch_db_updater,
                                                      {Filepath, Fd,
                                                       Opts}, []),
 

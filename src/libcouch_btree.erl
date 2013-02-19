@@ -10,14 +10,14 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_btree).
+-module(libcouch_btree).
 
 -export([open/2, open/3, query_modify/4, add/2, add_remove/3]).
 -export([fold/4, full_reduce/1, final_reduce/2, size/1, foldl/3, foldl/4]).
 -export([fold_reduce/4, lookup/2, get_state/1, set_options/2]).
 -export([less/3]).
 
--include("couch_db.hrl").
+-include("libcouch.hrl")
 -define(CHUNK_THRESHOLD, 16#4ff).
 
 extract(#btree{extract_kv=Extract}, Value) ->
@@ -65,10 +65,10 @@ final_reduce(Reduce, {KVs, Reductions}) ->
     final_reduce(Reduce, {[], [Red | Reductions]}).
 
 fold_reduce(#btree{root=Root}=Bt, Fun, Acc, Options) ->
-    Dir = couch_util:get_value(dir, Options, fwd),
-    StartKey = couch_util:get_value(start_key, Options),
+    Dir = libcouch_util:get_value(dir, Options, fwd),
+    StartKey = libcouch_util:get_value(start_key, Options),
     InEndRangeFun = make_key_in_end_range_function(Bt, Dir, Options),
-    KeyGroupFun = couch_util:get_value(key_group_fun, Options, fun(_,_) -> true end),
+    KeyGroupFun = libcouch_util:get_value(key_group_fun, Options, fun(_,_) -> true end),
     try
         {ok, Acc2, GroupedRedsAcc2, GroupedKVsAcc2, GroupedKey2} =
             reduce_stream_node(Bt, Dir, Root, StartKey, InEndRangeFun, undefined, [], [],
@@ -113,9 +113,9 @@ convert_fun_arity(Fun) when is_function(Fun, 4) ->
     Fun.    % Already arity 4
 
 make_key_in_end_range_function(#btree{less=Less}, fwd, Options) ->
-    case couch_util:get_value(end_key_gt, Options) of
+    case libcouch_util:get_value(end_key_gt, Options) of
     undefined ->
-        case couch_util:get_value(end_key, Options) of
+        case libcouch_util:get_value(end_key, Options) of
         undefined ->
             fun(_Key) -> true end;
         LastKey ->
@@ -125,9 +125,9 @@ make_key_in_end_range_function(#btree{less=Less}, fwd, Options) ->
         fun(Key) -> Less(Key, EndKey) end
     end;
 make_key_in_end_range_function(#btree{less=Less}, rev, Options) ->
-    case couch_util:get_value(end_key_gt, Options) of
+    case libcouch_util:get_value(end_key_gt, Options) of
     undefined ->
-        case couch_util:get_value(end_key, Options) of
+        case libcouch_util:get_value(end_key, Options) of
         undefined ->
             fun(_Key) -> true end;
         LastKey ->
@@ -148,10 +148,10 @@ foldl(Bt, Fun, Acc, Options) ->
 fold(#btree{root=nil}, _Fun, Acc, _Options) ->
     {ok, {[], []}, Acc};
 fold(#btree{root=Root}=Bt, Fun, Acc, Options) ->
-    Dir = couch_util:get_value(dir, Options, fwd),
+    Dir = libcouch_util:get_value(dir, Options, fwd),
     InRange = make_key_in_end_range_function(Bt, Dir, Options),
     Result =
-    case couch_util:get_value(start_key, Options) of
+    case libcouch_util:get_value(start_key, Options) of
     undefined ->
         stream_node(Bt, [], Bt#btree.root, InRange, Dir,
                 convert_fun_arity(Fun), Acc);
@@ -209,7 +209,7 @@ lookup(#btree{root=Root, less=Less}=Bt, Keys) ->
     % We want to return the results in the same order as the keys were input
     % but we may have changed the order when we sorted. So we need to put the
     % order back into the results.
-    couch_util:reorder_results(Keys, SortedResults).
+    libcouch_util:reorder_results(Keys, SortedResults).
 
 lookup(_Bt, nil, Keys) ->
     {ok, [{Key, not_found} || Key <- Keys]};
@@ -346,7 +346,7 @@ reduce_tree_size(kp_node, NodeSize, [{_K, {_P, _Red, Sz}} | NodeList]) ->
     reduce_tree_size(kp_node, NodeSize + Sz, NodeList).
 
 get_node(#btree{fd = Fd}, NodePos) ->
-    {ok, {NodeType, NodeList}} = couch_file:pread_term(Fd, NodePos),
+    {ok, {NodeType, NodeList}} = libcouch_file:pread_term(Fd, NodePos),
     {NodeType, NodeList}.
 
 write_node(#btree{fd = Fd, compression = Comp} = Bt, NodeType, NodeList) ->
@@ -355,7 +355,7 @@ write_node(#btree{fd = Fd, compression = Comp} = Bt, NodeType, NodeList) ->
     % now write out each chunk and return the KeyPointer pairs for those nodes
     ResultList = [
         begin
-            {ok, Pointer, Size} = couch_file:append_term(
+            {ok, Pointer, Size} = libcouch_file:append_term(
                 Fd, {NodeType, ANodeList}, [{compression, Comp}]),
             {LastKey, _} = lists:last(ANodeList),
             SubTreeSize = reduce_tree_size(NodeType, Size, ANodeList),

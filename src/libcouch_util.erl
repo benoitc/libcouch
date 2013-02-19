@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_util).
+-module(libcouch_util).
 
 -export([priv_dir/0, normpath/1]).
 -export([should_flush/0, should_flush/1, to_existing_atom/1]).
@@ -34,7 +34,7 @@
 -export([register/1, unregister/1, lookup/1, await/1, await/2]).
 
 
--include("couch_db.hrl").
+-include("libcouch_db.hrl").
 
 % arbitrarily chosen amount of memory to use before flushing to disk
 -define(FLUSH_MAX_MEM, 10000000).

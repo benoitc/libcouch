@@ -10,10 +10,10 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_file).
+-module(libcouch_file).
 -behaviour(gen_server).
 
--include("couch_db.hrl").
+-include("libcouch.hrl").
 
 
 -define(INITIAL_WAIT, 60000).
@@ -52,7 +52,7 @@ open(Filepath) ->
     open(Filepath, []).
 
 open(Filepath, Options) ->
-    case gen_server:start_link(couch_file,
+    case gen_server:start_link(libcouch_file,
             {Filepath, Options, self(), Ref = make_ref()}, []) of
     {ok, Fd} ->
         {ok, Fd};
@@ -93,15 +93,15 @@ append_term(Fd, Term) ->
     append_term(Fd, Term, []).
 
 append_term(Fd, Term, Options) ->
-    Comp = couch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
-    append_binary(Fd, couch_compress:compress(Term, Comp)).
+    Comp = libcouch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
+    append_binary(Fd, libcouch_compress:compress(Term, Comp)).
 
 append_term_md5(Fd, Term) ->
     append_term_md5(Fd, Term, []).
 
 append_term_md5(Fd, Term, Options) ->
-    Comp = couch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
-    append_binary_md5(Fd, couch_compress:compress(Term, Comp)).
+    Comp = libcouch_util:get_value(compression, Options, ?DEFAULT_COMPRESSION),
+    append_binary_md5(Fd, libcouch_compress:compress(Term, Comp)).
 
 %%----------------------------------------------------------------------
 %% Purpose: To append an Erlang binary to the end of the file.
@@ -116,7 +116,7 @@ append_binary(Fd, Bin) ->
 
 append_binary_md5(Fd, Bin) ->
     gen_server:call(Fd,
-        {append_bin, assemble_file_chunk(Bin, couch_util:md5(Bin))}, infinity).
+        {append_bin, assemble_file_chunk(Bin, libcouch_util:md5(Bin))}, infinity).
 
 append_raw_chunk(Fd, Chunk) ->
     gen_server:call(Fd, {append_bin, Chunk}, infinity).
@@ -138,7 +138,7 @@ assemble_file_chunk(Bin, Md5) ->
 
 pread_term(Fd, Pos) ->
     {ok, Bin} = pread_binary(Fd, Pos),
-    {ok, couch_compress:decompress(Bin)}.
+    {ok, libcouch_compress:decompress(Bin)}.
 
 
 %%----------------------------------------------------------------------
@@ -158,7 +158,7 @@ pread_iolist(Fd, Pos) ->
     {ok, IoList, <<>>} ->
         {ok, IoList};
     {ok, IoList, Md5} ->
-        case couch_util:md5(IoList) of
+        case libcouch_util:md5(IoList) of
         Md5 ->
             {ok, IoList};
         _ ->
@@ -204,7 +204,7 @@ sync(Fd) ->
 %% Returns: ok
 %%----------------------------------------------------------------------
 close(Fd) ->
-    couch_util:shutdown_sync(Fd).
+    libcouch_util:shutdown_sync(Fd).
 
 
 delete(RootDir, Filepath) ->
@@ -212,7 +212,7 @@ delete(RootDir, Filepath) ->
 
 
 delete(RootDir, Filepath, Async) ->
-    DelFile = filename:join([RootDir,".delete", ?b2l(couch_uuids:random())]),
+    DelFile = filename:join([RootDir,".delete", ?b2l(libcouch_uuids:random())]),
     case file:rename(Filepath, DelFile) of
     ok ->
         if (Async) ->
@@ -267,7 +267,7 @@ read_header(Fd) ->
 
 write_header(Fd, Data) ->
     Bin = term_to_binary(Data),
-    Md5 = couch_util:md5(Bin),
+    Md5 = libcouch_util:md5(Bin),
     % now we assemble the final header binary and write to disk
     FinalBin = <<Md5/binary, Bin/binary>>,
     gen_server:call(Fd, {write_header, FinalBin}, infinity).
@@ -463,7 +463,7 @@ load_header(Fd, Block) ->
     end,
     <<Md5Sig:16/binary, HeaderBin/binary>> =
         iolist_to_binary(remove_block_prefixes(5, RawBin)),
-    Md5Sig = couch_util:md5(HeaderBin),
+    Md5Sig = libcouch_util:md5(HeaderBin),
     {ok, HeaderBin}.
 
 maybe_read_more_iolist(Buffer, DataSize, _, _)

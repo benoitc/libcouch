@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_stream).
+-module(libcouch_stream).
 -behaviour(gen_server).
 
 % public API
@@ -22,7 +22,7 @@
 -export([init/1, terminate/2, code_change/3]).
 -export([handle_cast/2, handle_call/3, handle_info/2]).
 
--include("couch_db.hrl").
+-include("libcouch.hrl").
 
 -define(DEFAULT_BUFFER_SIZE, 4096).
 
@@ -49,7 +49,7 @@ open(Fd) ->
     open(Fd, []).
 
 open(Fd, Options) ->
-    gen_server:start_link(couch_stream, {Fd, Options}, []).
+    gen_server:start_link(libcouch_stream, {Fd, Options}, []).
 
 close(Pid) ->
     gen_server:call(Pid, close, infinity).
@@ -65,13 +65,13 @@ copy_to_new_stream(Fd, PosList, DestFd) ->
 foldl(_Fd, [], _Fun, Acc) ->
     Acc;
 foldl(Fd, [Pos|Rest], Fun, Acc) ->
-    {ok, Bin} = couch_file:pread_iolist(Fd, Pos),
+    {ok, Bin} = libcouch_file:pread_iolist(Fd, Pos),
     foldl(Fd, Rest, Fun, Fun(Bin, Acc)).
 
 foldl(Fd, PosList, <<>>, Fun, Acc) ->
     foldl(Fd, PosList, Fun, Acc);
 foldl(Fd, PosList, Md5, Fun, Acc) ->
-    foldl(Fd, PosList, Md5, couch_util:md5_init(), Fun, Acc).
+    foldl(Fd, PosList, Md5, libcouch_util:md5_init(), Fun, Acc).
 
 foldl_decode(Fd, PosList, Md5, Enc, Fun, Acc) ->
     {DecDataFun, DecEndFun} = case Enc of
@@ -81,25 +81,25 @@ foldl_decode(Fd, PosList, Md5, Enc, Fun, Acc) ->
         identity_enc_dec_funs()
     end,
     Result = foldl_decode(
-        DecDataFun, Fd, PosList, Md5, couch_util:md5_init(), Fun, Acc
+        DecDataFun, Fd, PosList, Md5, libcouch_util:md5_init(), Fun, Acc
     ),
     DecEndFun(),
     Result.
 
 foldl(_Fd, [], Md5, Md5Acc, _Fun, Acc) ->
-    Md5 = couch_util:md5_final(Md5Acc),
+    Md5 = libcouch_util:md5_final(Md5Acc),
     Acc;
 foldl(Fd, [{Pos, _Size}], Md5, Md5Acc, Fun, Acc) -> % 0110 UPGRADE CODE
     foldl(Fd, [Pos], Md5, Md5Acc, Fun, Acc);
 foldl(Fd, [Pos], Md5, Md5Acc, Fun, Acc) ->
-    {ok, Bin} = couch_file:pread_iolist(Fd, Pos),
-    Md5 = couch_util:md5_final(couch_util:md5_update(Md5Acc, Bin)),
+    {ok, Bin} = libcouch_file:pread_iolist(Fd, Pos),
+    Md5 = libcouch_util:md5_final(libcouch_util:md5_update(Md5Acc, Bin)),
     Fun(Bin, Acc);
 foldl(Fd, [{Pos, _Size}|Rest], Md5, Md5Acc, Fun, Acc) ->
     foldl(Fd, [Pos|Rest], Md5, Md5Acc, Fun, Acc);
 foldl(Fd, [Pos|Rest], Md5, Md5Acc, Fun, Acc) ->
-    {ok, Bin} = couch_file:pread_iolist(Fd, Pos),
-    foldl(Fd, Rest, Md5, couch_util:md5_update(Md5Acc, Bin), Fun, Fun(Bin, Acc)).
+    {ok, Bin} = libcouch_file:pread_iolist(Fd, Pos),
+    foldl(Fd, Rest, Md5, libcouch_util:md5_update(Md5Acc, Bin), Fun, Fun(Bin, Acc)).
 
 range_foldl(Fd, PosList, From, To, Fun, Acc) ->
     range_foldl(Fd, PosList, From, To, 0, Fun, Acc).
@@ -107,12 +107,12 @@ range_foldl(Fd, PosList, From, To, Fun, Acc) ->
 range_foldl(_Fd, _PosList, _From, To, Off, _Fun, Acc) when Off >= To ->
     Acc;
 range_foldl(Fd, [Pos|Rest], From, To, Off, Fun, Acc) when is_integer(Pos) -> % old-style attachment
-    {ok, Bin} = couch_file:pread_iolist(Fd, Pos),
+    {ok, Bin} = libcouch_file:pread_iolist(Fd, Pos),
     range_foldl(Fd, [{Pos, iolist_size(Bin)}] ++ Rest, From, To, Off, Fun, Acc);
 range_foldl(Fd, [{_Pos, Size}|Rest], From, To, Off, Fun, Acc) when From > Off + Size ->
     range_foldl(Fd, Rest, From, To, Off + Size, Fun, Acc);
 range_foldl(Fd, [{Pos, Size}|Rest], From, To, Off, Fun, Acc) ->
-    {ok, Bin} = couch_file:pread_iolist(Fd, Pos),
+    {ok, Bin} = libcouch_file:pread_iolist(Fd, Pos),
     Bin1 = if
         From =< Off andalso To >= Off + Size -> Bin; %% the whole block is covered
         true ->
@@ -132,25 +132,25 @@ clip(Value, Lo, Hi) ->
     end.
 
 foldl_decode(_DecFun, _Fd, [], Md5, Md5Acc, _Fun, Acc) ->
-    Md5 = couch_util:md5_final(Md5Acc),
+    Md5 = libcouch_util:md5_final(Md5Acc),
     Acc;
 foldl_decode(DecFun, Fd, [{Pos, _Size}], Md5, Md5Acc, Fun, Acc) ->
     foldl_decode(DecFun, Fd, [Pos], Md5, Md5Acc, Fun, Acc);
 foldl_decode(DecFun, Fd, [Pos], Md5, Md5Acc, Fun, Acc) ->
-    {ok, EncBin} = couch_file:pread_iolist(Fd, Pos),
-    Md5 = couch_util:md5_final(couch_util:md5_update(Md5Acc, EncBin)),
+    {ok, EncBin} = libcouch_file:pread_iolist(Fd, Pos),
+    Md5 = libcouch_util:md5_final(libcouch_util:md5_update(Md5Acc, EncBin)),
     Bin = DecFun(EncBin),
     Fun(Bin, Acc);
 foldl_decode(DecFun, Fd, [{Pos, _Size}|Rest], Md5, Md5Acc, Fun, Acc) ->
     foldl_decode(DecFun, Fd, [Pos|Rest], Md5, Md5Acc, Fun, Acc);
 foldl_decode(DecFun, Fd, [Pos|Rest], Md5, Md5Acc, Fun, Acc) ->
-    {ok, EncBin} = couch_file:pread_iolist(Fd, Pos),
+    {ok, EncBin} = libcouch_file:pread_iolist(Fd, Pos),
     Bin = DecFun(EncBin),
-    Md5Acc2 = couch_util:md5_update(Md5Acc, EncBin),
+    Md5Acc2 = libcouch_util:md5_update(Md5Acc, EncBin),
     foldl_decode(DecFun, Fd, Rest, Md5, Md5Acc2, Fun, Fun(Bin, Acc)).
 
 gzip_init(Options) ->
-    case couch_util:get_value(compression_level, Options, 0) of
+    case libcouch_util:get_value(compression_level, Options, 0) of
     Lvl when Lvl >= 1 andalso Lvl =< 9 ->
         Z = zlib:open(),
         % 15 = ?MAX_WBITS (defined in the zlib module)
@@ -198,7 +198,7 @@ write(Pid, Bin) ->
 
 init({Fd, Options}) ->
     {EncodingFun, EndEncodingFun} =
-    case couch_util:get_value(encoding, Options, identity) of
+    case libcouch_util:get_value(encoding, Options, identity) of
     identity ->
         identity_enc_dec_funs();
     gzip ->
@@ -206,11 +206,11 @@ init({Fd, Options}) ->
     end,
     {ok, #stream{
             fd=Fd,
-            md5=couch_util:md5_init(),
-            identity_md5=couch_util:md5_init(),
+            md5=libcouch_util:md5_init(),
+            identity_md5=libcouch_util:md5_init(),
             encoding_fun=EncodingFun,
             end_encoding_fun=EndEncodingFun,
-            max_buffer=couch_util:get_value(
+            max_buffer=libcouch_util:get_value(
                 buffer_size, Options, ?DEFAULT_BUFFER_SIZE)
         }
     }.
@@ -233,7 +233,7 @@ handle_call({write, Bin}, _From, Stream) ->
         encoding_fun = EncodingFun} = Stream,
     if BinSize + BufferLen > Max ->
         WriteBin = lists:reverse(Buffer, [Bin]),
-        IdenMd5_2 = couch_util:md5_update(IdenMd5, WriteBin),
+        IdenMd5_2 = libcouch_util:md5_update(IdenMd5, WriteBin),
         case EncodingFun(WriteBin) of
         [] ->
             % case where the encoder did some internal buffering
@@ -242,9 +242,9 @@ handle_call({write, Bin}, _From, Stream) ->
             Md5_2 = Md5,
             Written2 = Written;
         WriteBin2 ->
-            {ok, Pos, _} = couch_file:append_binary(Fd, WriteBin2),
+            {ok, Pos, _} = libcouch_file:append_binary(Fd, WriteBin2),
             WrittenLen2 = WrittenLen + iolist_size(WriteBin2),
-            Md5_2 = couch_util:md5_update(Md5, WriteBin2),
+            Md5_2 = libcouch_util:md5_update(Md5, WriteBin2),
             Written2 = [{Pos, iolist_size(WriteBin2)}|Written]
         end,
 
@@ -275,14 +275,14 @@ handle_call(close, _From, Stream) ->
         end_encoding_fun = EndEncodingFun} = Stream,
 
     WriteBin = lists:reverse(Buffer),
-    IdenMd5Final = couch_util:md5_final(couch_util:md5_update(IdenMd5, WriteBin)),
+    IdenMd5Final = libcouch_util:md5_final(libcouch_util:md5_update(IdenMd5, WriteBin)),
     WriteBin2 = EncodingFun(WriteBin) ++ EndEncodingFun(),
-    Md5Final = couch_util:md5_final(couch_util:md5_update(Md5, WriteBin2)),
+    Md5Final = libcouch_util:md5_final(libcouch_util:md5_update(Md5, WriteBin2)),
     Result = case WriteBin2 of
     [] ->
         {lists:reverse(Written), WrittenLen, IdenLen, Md5Final, IdenMd5Final};
     _ ->
-        {ok, Pos, _} = couch_file:append_binary(Fd, WriteBin2),
+        {ok, Pos, _} = libcouch_file:append_binary(Fd, WriteBin2),
         StreamInfo = lists:reverse(Written, [{Pos, iolist_size(WriteBin2)}]),
         StreamLen = WrittenLen + iolist_size(WriteBin2),
         {StreamInfo, StreamLen, IdenLen, Md5Final, IdenMd5Final}

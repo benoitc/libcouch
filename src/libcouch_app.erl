@@ -10,20 +10,20 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_app).
+-module(libcouch_app).
 
 -behaviour(application).
 
--include("couch_db.hrl").
+-include("libcouch_db.hrl").
 
 -export([start/2, stop/1]).
 
--define(CONF_FILES, ["couch.ini", "couch_httpd.ini", "local.ini"]).
+-define(CONF_FILES, ["couch.ini", "libcouch_httpd.ini", "local.ini"]).
 
 start(_Type, _Args) ->
-    couch_util:start_app_deps(couch),
+    libcouch_util:start_app_deps(couch),
     IniFiles = get_ini_files(),
-    couch_server_sup:start_link(IniFiles).
+    libcouch_server_sup:start_link(IniFiles).
 
 stop(_) ->
     ok.

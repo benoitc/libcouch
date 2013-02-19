@@ -10,7 +10,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couch_doc).
+-module(libcouch_doc).
 
 -export([to_doc_info/1,to_doc_info_path/1,parse_rev/1,parse_revs/1,
          rev_to_str/1,revs_to_strs/1]).
@@ -20,7 +20,7 @@
 -export([to_path/1]).
 -export([with_ejson_body/1]).
 
--include("couch_db.hrl").
+-include("libcouch.hrl").
 
 -spec to_path(#doc{}) -> path().
 to_path(#doc{revs={Start, RevIds}}=Doc) ->
@@ -53,7 +53,7 @@ to_json_revisions(Options, Start, RevIds) ->
     end.
 
 revid_to_str(RevId) when size(RevId) =:= 16 ->
-    ?l2b(couch_util:to_hex(RevId));
+    ?l2b(libcouch_util:to_hex(RevId));
 revid_to_str(RevId) ->
     RevId.
 
@@ -129,7 +129,7 @@ to_json_attachments(Atts, OutputData, DataToFollow, ShowEncInfo) ->
                         [];
                     {true, _} ->
                         [
-                            {<<"encoding">>, couch_util:to_binary(Enc)},
+                            {<<"encoding">>, libcouch_util:to_binary(Enc)},
                             {<<"encoded_length">>, AttLen}
                         ]
                     end
@@ -186,7 +186,7 @@ parse_revs([Rev | Rest]) ->
 
 
 validate_docid(Id) when is_binary(Id) ->
-    case couch_util:validate_utf8(Id) of
+    case libcouch_util:validate_utf8(Id) of
         false -> throw({bad_request, <<"Document id must be valid UTF-8">>});
         true -> ok
     end,
@@ -220,32 +220,32 @@ transfer_fields([{<<"_rev">>, _Rev} | Rest], Doc) ->
 
 transfer_fields([{<<"_attachments">>, {JsonBins}} | Rest], Doc) ->
     Atts = lists:map(fun({Name, {BinProps}}) ->
-        Md5 = case couch_util:get_value(<<"digest">>, BinProps) of
+        Md5 = case libcouch_util:get_value(<<"digest">>, BinProps) of
             <<"md5-",EncodedMd5/binary>> ->
                 base64:decode(EncodedMd5);
             _ ->
                <<>>
         end,
-        case couch_util:get_value(<<"stub">>, BinProps) of
+        case libcouch_util:get_value(<<"stub">>, BinProps) of
         true ->
-            Type = couch_util:get_value(<<"content_type">>, BinProps),
-            RevPos = couch_util:get_value(<<"revpos">>, BinProps, nil),
-            DiskLen = couch_util:get_value(<<"length">>, BinProps),
+            Type = libcouch_util:get_value(<<"content_type">>, BinProps),
+            RevPos = libcouch_util:get_value(<<"revpos">>, BinProps, nil),
+            DiskLen = libcouch_util:get_value(<<"length">>, BinProps),
             {Enc, EncLen} = att_encoding_info(BinProps),
             #att{name=Name, data=stub, type=Type, att_len=EncLen,
                 disk_len=DiskLen, encoding=Enc, revpos=RevPos, md5=Md5};
         _ ->
-            Type = couch_util:get_value(<<"content_type">>, BinProps,
+            Type = libcouch_util:get_value(<<"content_type">>, BinProps,
                     ?DEFAULT_ATTACHMENT_CONTENT_TYPE),
-            RevPos = couch_util:get_value(<<"revpos">>, BinProps, 0),
-            case couch_util:get_value(<<"follows">>, BinProps) of
+            RevPos = libcouch_util:get_value(<<"revpos">>, BinProps, 0),
+            case libcouch_util:get_value(<<"follows">>, BinProps) of
             true ->
-                DiskLen = couch_util:get_value(<<"length">>, BinProps),
+                DiskLen = libcouch_util:get_value(<<"length">>, BinProps),
                 {Enc, EncLen} = att_encoding_info(BinProps),
                 #att{name=Name, data=follows, type=Type, encoding=Enc,
                     att_len=EncLen, disk_len=DiskLen, revpos=RevPos, md5=Md5};
             _ ->
-                Value = couch_util:get_value(<<"data">>, BinProps),
+                Value = libcouch_util:get_value(<<"data">>, BinProps),
                 Bin = base64:decode(Value),
                 LenBin = size(Bin),
                 #att{name=Name, data=Bin, type=Type, att_len=LenBin,
@@ -256,8 +256,8 @@ transfer_fields([{<<"_attachments">>, {JsonBins}} | Rest], Doc) ->
     transfer_fields(Rest, Doc#doc{atts=Atts});
 
 transfer_fields([{<<"_revisions">>, {Props}} | Rest], Doc) ->
-    RevIds = couch_util:get_value(<<"ids">>, Props),
-    Start = couch_util:get_value(<<"start">>, Props),
+    RevIds = libcouch_util:get_value(<<"ids">>, Props),
+    Start = libcouch_util:get_value(<<"start">>, Props),
     if not is_integer(Start) ->
         throw({doc_validation, "_revisions.start isn't an integer."});
     not is_list(RevIds) ->
@@ -306,12 +306,12 @@ transfer_fields([Field | Rest], #doc{body=Fields}=Doc) ->
     transfer_fields(Rest, Doc#doc{body=[Field|Fields]}).
 
 att_encoding_info(BinProps) ->
-    DiskLen = couch_util:get_value(<<"length">>, BinProps),
-    case couch_util:get_value(<<"encoding">>, BinProps) of
+    DiskLen = libcouch_util:get_value(<<"length">>, BinProps),
+    case libcouch_util:get_value(<<"encoding">>, BinProps) of
     undefined ->
         {identity, DiskLen};
     Enc ->
-        EncodedLen = couch_util:get_value(<<"encoded_length">>, BinProps, DiskLen),
+        EncodedLen = libcouch_util:get_value(<<"encoded_length">>, BinProps, DiskLen),
         {list_to_existing_atom(?b2l(Enc)), EncodedLen}
     end.
 
@@ -331,7 +331,7 @@ max_seq(Tree, UpdateSeq) ->
                 MaxOldSeq
         end
     end,
-    couch_key_tree:fold(FoldFun, UpdateSeq, Tree).
+    libcouch_key_tree:fold(FoldFun, UpdateSeq, Tree).
 
 to_doc_info_path(#full_doc_info{id=Id,rev_tree=Tree,update_seq=Seq}) ->
     RevInfosAndPath = [
@@ -341,7 +341,7 @@ to_doc_info_path(#full_doc_info{id=Id,rev_tree=Tree,update_seq=Seq}) ->
             seq = element(3, LeafVal),
             rev = {Pos, RevId}
         }, Path} || {LeafVal, {Pos, [RevId | _]} = Path} <-
-            couch_key_tree:get_all_leafs(Tree)
+            libcouch_key_tree:get_all_leafs(Tree)
     ],
     SortedRevInfosAndPath = lists:sort(
             fun({#rev_info{deleted=DeletedA,rev=RevA}, _PathA},
@@ -357,15 +357,15 @@ to_doc_info_path(#full_doc_info{id=Id,rev_tree=Tree,update_seq=Seq}) ->
 att_foldl(#att{data=Bin}, Fun, Acc) when is_binary(Bin) ->
     Fun(Bin, Acc);
 att_foldl(#att{data={Fd,Sp},md5=Md5}, Fun, Acc) ->
-    couch_stream:foldl(Fd, Sp, Md5, Fun, Acc);
+    libcouch_stream:foldl(Fd, Sp, Md5, Fun, Acc);
 att_foldl(#att{data=DataFun,att_len=Len}, Fun, Acc) when is_function(DataFun) ->
    fold_streamed_data(DataFun, Len, Fun, Acc).
 
 range_att_foldl(#att{data={Fd,Sp}}, From, To, Fun, Acc) ->
-   couch_stream:range_foldl(Fd, Sp, From, To, Fun, Acc).
+   libcouch_stream:range_foldl(Fd, Sp, From, To, Fun, Acc).
 
 att_foldl_decode(#att{data={Fd,Sp},md5=Md5,encoding=Enc}, Fun, Acc) ->
-    couch_stream:foldl_decode(Fd, Sp, Md5, Enc, Fun, Acc);
+    libcouch_stream:foldl_decode(Fd, Sp, Md5, Enc, Fun, Acc);
 att_foldl_decode(#att{data=Fun2,att_len=Len, encoding=identity}, Fun, Acc) ->
        fold_streamed_data(Fun2, Len, Fun, Acc).
 
@@ -427,6 +427,6 @@ fold_streamed_data(RcvFun, LenLeft, Fun, Acc) when LenLeft > 0->
     fold_streamed_data(RcvFun, LenLeft - size(Bin), Fun, ResultAcc).
 
 with_ejson_body(#doc{body = Body} = Doc) when is_binary(Body) ->
-    Doc#doc{body = couch_compress:decompress(Body)};
+    Doc#doc{body = libcouch_compress:decompress(Body)};
 with_ejson_body(#doc{body = {_}} = Doc) ->
     Doc.
